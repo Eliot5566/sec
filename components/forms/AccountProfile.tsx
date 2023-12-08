@@ -16,9 +16,11 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { UserValidation } from '@/lib/validations/user';
 import * as z from 'zod'
 import Image from 'next/image'
-import { ChangeEvent } from 'react'
+import { ChangeEvent, useState } from 'react'
 import { Textarea } from '../ui/textarea'
+import { isBase64Image } from '@/lib/utils'
 
+import { useUploadThing } from '@/lib/uploadthing'
 
 interface Props {
   user: {
@@ -35,9 +37,8 @@ interface Props {
 //這個物件有兩個屬性，user和btnTitle
 //使用在AccountProfile這個function裡面
 
-const handleImage = (e: ChangeEvent, fieldChange: (value: string) => void) => {
-  e.preventDefault();
-}
+
+  
 //handleImage是一個function，有兩個參數，e和fieldChange 
 //e是一個事件，fieldChange是一個function，這個function有一個參數，value，型別是string 
 //這段用來處理圖片上傳的功能 如果有上傳圖片，就會觸發fieldChange這個function 
@@ -45,30 +46,70 @@ const handleImage = (e: ChangeEvent, fieldChange: (value: string) => void) => {
 //e.preventDefault()是一個事件，用來阻止預設行為，這裡是阻止上傳圖片的預設行為 
 //為甚麼要阻止預設行為呢？因為我們要自己寫上傳圖片的功能，所以要阻止預設行為
 
-function onSubmit(values: z.infer<typeof UserValidation>) {
-  // Do something with the form values.
-  // ✅ This will be type-safe and validated.
-  console.log(values)
-}
-
-//onSubmit是一個function，有一個參數，values，型別是z.infer<typeof UserValidation>
-//z.infer<typeof UserValidation>是一個型別，這個型別是從UserValidation這個變數裡面推斷出來的
-//UserValidation是一個變數，這個變數是從UserValidation這個檔案裡面匯出來的
-
 
 const AccountProfile = ({ user, btnTitle }: Props) => {
+  const [files , setFiles] = useState<File[]> ([])
+  const { startUpload} = useUploadThing("media");
+
+  const handleImage = (e: ChangeEvent<HTMLInputElement>, 
+    fieldChange: (value: string) => void) => {
+    e.preventDefault();
+  
+    const fileReader = new FileReader();
+  
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+  
+      setFiles(Array.from(e.target.files));
+  
+      if(!file.type.includes('image')) return;
+  
+      fileReader.onload = async(event) => {
+        const imageDateUrl = event.target?.result?.toString() || "";
+  
+        fieldChange(imageDateUrl);
+      }
+  
+      fileReader.readAsDataURL(file);
+  
+    };
+  
+  }
 //AccountProfile是一個function，有兩個參數，user和btnTitle，型別是Props Props的意思是這個function的參數必須是Props這個型別
   const form = useForm({
     resolver: zodResolver(UserValidation),
     //resolver是一個物件，裡面有一個屬性，zodResolver，型別是UserValidation 
     defaultValues: {
       //defaultValues是一個物件，裡面有五個屬性，id,objectId,username,name,bio,image
-      profile_photo: '',
-      name: '',
-      username: '',
-      bio: '',
+      profile_photo: user?.image || "",
+      name: user?.name || "",
+      username:  user?.username || "",
+      bio: user?.bio || "",
     },
   })
+
+
+  const onSubmit = async (values: z.infer<typeof UserValidation>) => {
+    // Do something with the form values.
+    // ✅ This will be type-safe and validated.
+    const blob = values.profile_photo;
+  
+    const hasImageChanged = isBase64Image(blob);
+  
+    if(hasImageChanged) {
+      const imgRes = await startUpload(files);
+
+      if(imgRes && imgRes[0].fileUrl){
+        values.profile_photo = imgRes[0].fileUrl;
+      }
+    }
+  }
+  
+  //onSubmit是一個function，有一個參數，values，型別是z.infer<typeof UserValidation>
+  //z.infer<typeof UserValidation>是一個型別，這個型別是從UserValidation這個變數裡面推斷出來的
+  //UserValidation是一個變數，這個變數是從UserValidation這個檔案裡面匯出來的
+  
+  
   return (
     <Form {...form}>
       {/* Form {...form} 的意思是把form這個物件裡面的屬性，傳遞給Form這個component */}
